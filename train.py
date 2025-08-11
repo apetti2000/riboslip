@@ -10,7 +10,8 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import torch
 import tqdm
-
+import random
+import numpy as np
 import data_loading
 
 
@@ -48,7 +49,9 @@ def main_loop(model_fns,
       'CosineAnnealingLR': lambda opt: optim.lr_scheduler.CosineAnnealingLR(opt, T_max=50),
       'CyclicLR': lambda opt: optim.lr_scheduler.CyclicLR(opt, base_lr=lr * 0.1, max_lr=lr * 1.5, step_size_up=30, mode='triangular')
     }
-
+    torch.manual_seed(0)
+    random.seed(0)
+    np.random.seed(0)
     train_loader, val_loader = data_loading.build_dataloaders(data, 'minus', test_split=mix, data_augment=data_augment)
     model = model_fn().to(device)
     classification_criterion = nn.BCELoss()
@@ -175,7 +178,7 @@ def train_model(model,
                 writer,
                 epochs=50,
                 scheduler=None,
-                patience: int = 5):
+                patience: int = 50):
   
   dummy_input = next(iter(train_loader))[0][:1].to(device)
   _ = model(dummy_input)
@@ -241,7 +244,7 @@ def train_model(model,
       writer=writer
     )
 
-    val_loss = val_metrics['total_loss']
+    val_loss = val_metrics['val_loss']
 
     if val_loss < best_val_loss:
       best_val_loss = val_loss

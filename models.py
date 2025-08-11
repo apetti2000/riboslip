@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import math 
 
 # Imitate https://keras.io/api/layers/regularization_layers/gaussian_noise/
 class GaussianNoise(nn.Module):
@@ -259,3 +259,47 @@ class RNACNN_FC(nn.Module):
 
   def name(self):
     return 'RNACNN_FC'
+
+import torch.nn as nn
+
+class RNACNN_pete(nn.Module):
+    def __init__(self):
+        super(RNACNN_pete, self).__init__()
+        kernel_size = 3  # Fixed small kernel for local features
+        dilations = [1, 7, 24, 32]  # Increasing to grow receptive field: ~3, ~17, ~65, ~129
+        channels = [4, 32, 64, 128, 256]  # Input channels + increasing out_channels
+
+        self.features = nn.Sequential()
+        for i in range(4):
+            in_ch = channels[i]
+            out_ch = channels[i + 1]
+            d = dilations[i]
+            pad = d * (kernel_size - 1) // 2  # Padding for 'same' output size
+            self.features.add_module(f'conv{i}', nn.Conv1d(in_ch, out_ch, kernel_size=kernel_size, stride=1, dilation=d, padding=pad))
+            self.features.add_module(f'bn{i}', nn.BatchNorm1d(out_ch))
+            self.features.add_module(f'relu{i}', nn.ReLU())
+            self.features.add_module(f'drop{i}', nn.Dropout(0.5))
+
+        self.features.add_module('adaptive_pool', nn.AdaptiveMaxPool1d(1))
+
+        self.shared_dropout = nn.Dropout(0.5)
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.LazyLinear(1),
+            nn.Sigmoid()
+        )
+        self.regression = nn.Sequential(
+            nn.Flatten(),
+            nn.LazyLinear(1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.shared_dropout(x)
+        logits = self.classifier(x)
+        rate = self.regression(x)
+        return logits, rate
+
+    def name(self):
+        return 'RNACNN_pete'
