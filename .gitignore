@@ -1,0 +1,17 @@
+**/.ipynb_checkpoints/
+**/.venv/*
+**/venv/*
+venv/*
+.venv/*
+
+# vim
+*.swp
+
+*/runs/*
+*/logs/*
+*/__pycache__/*
+
+
+**/.DS_Store
+
+.vscode
