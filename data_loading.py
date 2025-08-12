@@ -1,6 +1,6 @@
 import os
 from typing import Literal, Tuple, Union
-
+from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -30,26 +30,57 @@ def build_dataset(csv_path: os.PathLike, class_thresh: int = 100):
 
     return df
 
+def load_trna_mapping(file_path: str) -> dict[str, float]:
+    tai_df = pd.read_csv(file_path, sep='\t')
+    codon_to_w = {}
+    for _, row in tai_df.iterrows():
+        w_str = str(row['w ']).strip()
+        if w_str != '----' and not pd.isna(w_str):
+            try:
+                codon_to_w[row['Codon']] = float(w_str)
+            except ValueError:
+                pass
+    return codon_to_w
 
-def encode_seq(seq: str) -> np.ndarray:
+def encode_seq(seq: str, trna_av: Mapping[str, float]) -> np.ndarray:
     nuc_to_idx = {'A': 0, 'C': 1, 'G': 2, 'U': 3, 'T': 3}
-    
-    X = np.zeros((4, len(seq)))
+
+    X = np.zeros((5, len(seq)))
     for i, c in enumerate(seq):
         X[nuc_to_idx[c], i] = 1
 
+    for i in range(0, len(seq), 3):
+        codon = seq[i:i+3]
+        if len(codon) == 3:
+            tRNA_value = trna_av.get(codon, 0.0)
+            X[4, i:i+3] = tRNA_value
+        
+    remainder = len(seq) % 3
+    if remainder > 0:
+        X[4, -remainder:] = 0.0
+
     return X
+
+#def encode_seq(seq: str) -> np.ndarray:
+#    nuc_to_idx = {'A': 0, 'C': 1, 'G': 2, 'U': 3, 'T': 3}
+    
+#    X = np.zeros((4, len(seq)))
+#    for i, c in enumerate(seq):
+#        X[nuc_to_idx[c], i] = 1
+
+ #   return X
     
 
 def build_tensors(data: pd.DataFrame, key: Literal['minus', 'plus'], size: int = 162, stride: int = 1):
+    trna_av = load_trna_mapping("tAI_index_human_nar-02315.txt")
     X_acc = []
     y_class_acc = []
     y_reg_acc = []
-
+    
     for _, row in data.iterrows():
         seq = row['sequence']
         for end in range(size, len(seq)+1, stride):
-            X_acc.append(encode_seq(seq[end-size:end]))
+            X_acc.append(encode_seq(seq[end-size:end], trna_av))
             y_class_acc.append(row[f'gfp_{key}'])
             y_reg_acc.append(row[f'gfp_{key}_rate'])
 

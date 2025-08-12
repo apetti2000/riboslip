@@ -260,34 +260,48 @@ class RNACNN_FC(nn.Module):
   def name(self):
     return 'RNACNN_FC'
 
-import torch.nn as nn
-
 class RNACNN_pete(nn.Module):
     def __init__(self):
         super(RNACNN_pete, self).__init__()
-        kernel_size = 3  # Fixed small kernel for local features
-        dilations = [1, 7, 24, 32]  # Increasing to grow receptive field: ~3, ~17, ~65, ~129
-        channels = [4, 32, 64, 128, 256]  # Input channels + increasing out_channels
 
-        self.features = nn.Sequential()
-        for i in range(4):
-            in_ch = channels[i]
-            out_ch = channels[i + 1]
-            d = dilations[i]
-            pad = d * (kernel_size - 1) // 2  # Padding for 'same' output size
-            self.features.add_module(f'conv{i}', nn.Conv1d(in_ch, out_ch, kernel_size=kernel_size, stride=1, dilation=d, padding=pad))
-            self.features.add_module(f'bn{i}', nn.BatchNorm1d(out_ch))
-            self.features.add_module(f'relu{i}', nn.ReLU())
-            self.features.add_module(f'drop{i}', nn.Dropout(0.5))
+        self.features = nn.Sequential(
+            # First conv block (in_channels=5)
+            nn.Conv1d(in_channels=5, out_channels=128, kernel_size=24, stride=1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.MaxPool1d(2),
 
-        self.features.add_module('adaptive_pool', nn.AdaptiveMaxPool1d(1))
+            # Second conv block
+            nn.Conv1d(in_channels=128, out_channels=64, kernel_size=12, stride=1),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.MaxPool1d(2),
+
+            # Third conv block
+            nn.Conv1d(in_channels=64, out_channels=64, kernel_size=6, stride=1),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.MaxPool1d(2),
+
+            # Fourth conv block
+            nn.Conv1d(in_channels=64, out_channels=32, kernel_size=3, stride=1),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.AdaptiveMaxPool1d(1)
+        )
 
         self.shared_dropout = nn.Dropout(0.5)
+
         self.classifier = nn.Sequential(
             nn.Flatten(),
             nn.LazyLinear(1),
             nn.Sigmoid()
         )
+
         self.regression = nn.Sequential(
             nn.Flatten(),
             nn.LazyLinear(1),

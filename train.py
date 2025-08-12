@@ -10,8 +10,7 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import torch
 import tqdm
-import random
-import numpy as np
+
 import data_loading
 
 
@@ -46,12 +45,10 @@ def main_loop(model_fns,
     scheduler_dict = {
       'StepLR': lambda opt: optim.lr_scheduler.StepLR(opt, step_size=30, gamma=0.1),
       'ExponentialLR': lambda opt: optim.lr_scheduler.ExponentialLR(opt, gamma=0.95),
-      'CosineAnnealingLR': lambda opt: optim.lr_scheduler.CosineAnnealingLR(opt, T_max=50),
-      'CyclicLR': lambda opt: optim.lr_scheduler.CyclicLR(opt, base_lr=lr * 0.1, max_lr=lr * 1.5, step_size_up=30, mode='triangular')
+      'CosineAnnealingLR': lambda opt: optim.lr_scheduler.CosineAnnealingLR(opt, T_max=100),
+      'CyclicLR': lambda opt: optim.lr_scheduler.CyclicLR(opt, base_lr= lr * 0.1, max_lr=lr * 1.5, step_size_up=20, mode='triangular2')
     }
-    torch.manual_seed(0)
-    random.seed(0)
-    np.random.seed(0)
+
     train_loader, val_loader = data_loading.build_dataloaders(data, 'minus', test_split=mix, data_augment=data_augment)
     model = model_fn().to(device)
     classification_criterion = nn.BCELoss()
@@ -178,7 +175,7 @@ def train_model(model,
                 writer,
                 epochs=50,
                 scheduler=None,
-                patience: int = 50):
+                patience: int = 200):
   
   dummy_input = next(iter(train_loader))[0][:1].to(device)
   _ = model(dummy_input)
