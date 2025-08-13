@@ -10,6 +10,7 @@ venv/*
 */runs/*
 */logs/*
 */__pycache__/*
+*.pth
 
 
 **/.DS_Store
