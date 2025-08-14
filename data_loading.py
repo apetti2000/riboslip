@@ -1,5 +1,5 @@
 import os
-from typing import Literal, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 from collections.abc import Mapping
 import numpy as np
 import pandas as pd
@@ -30,6 +30,7 @@ def build_dataset(csv_path: os.PathLike, class_thresh: int = 100):
 
     return df
 
+
 def load_trna_mapping(file_path: str) -> dict[str, float]:
     tai_df = pd.read_csv(file_path, sep='\t')
     codon_to_w = {}
@@ -42,52 +43,42 @@ def load_trna_mapping(file_path: str) -> dict[str, float]:
                 pass
     return codon_to_w
 
-def encode_seq(seq: str, trna_av: Mapping[str, float]) -> np.ndarray:
-    nuc_to_idx = {'A': 0, 'C': 1, 'G': 2, 'U': 3, 'T': 3}
 
-    X = np.zeros((5, len(seq)))
+def encode_seq(seq: str, trna_availability: Optional[Mapping[str, float]]) -> np.ndarray:
+    _NUC_TO_IDX = {'A': 0, 'C': 1, 'G': 2, 'U': 3, 'T': 3}
+    dims = 4 if trna_availability is None else 5
+
+    X = np.zeros((dims, len(seq)))
     for i, c in enumerate(seq):
-        X[nuc_to_idx[c], i] = 1
+        X[_NUC_TO_IDX[c], i] = 1
 
-    for i in range(0, len(seq), 3):
-        codon = seq[i:i+3]
-        if len(codon) == 3:
-            tRNA_value = trna_av.get(codon, 0.0)
-            X[4, i:i+3] = tRNA_value
-        
-    remainder = len(seq) % 3
-    if remainder > 0:
-        X[4, -remainder:] = 0.0
+    if trna_av:
+        for i in range(0, len(seq)-3):
+            X[4, i:i+3] = trna_availability[seq[i:i+3]]
 
     return X
 
-#def encode_seq(seq: str) -> np.ndarray:
-#    nuc_to_idx = {'A': 0, 'C': 1, 'G': 2, 'U': 3, 'T': 3}
-    
-#    X = np.zeros((4, len(seq)))
-#    for i, c in enumerate(seq):
-#        X[nuc_to_idx[c], i] = 1
 
- #   return X
-    
-
-def build_tensors(data: pd.DataFrame, key: Literal['minus', 'plus'], size: int = 162, stride: int = 1):
-    trna_av = load_trna_mapping("tAI_index_human_nar-02315.txt")
+def build_tensors(data: pd.DataFrame,
+                  key: Literal['minus', 'plus'],
+                  size: int = 162,
+                  stride: int = 1,
+                  trna_availability: Optional[Mapping[str, float]] = None):
     X_acc = []
     y_class_acc = []
     y_reg_acc = []
-    
+
     for _, row in data.iterrows():
         seq = row['sequence']
         for end in range(size, len(seq)+1, stride):
-            X_acc.append(encode_seq(seq[end-size:end], trna_av))
+            X_acc.append(encode_seq(seq[end-size:end], trna_availability))
             y_class_acc.append(row[f'gfp_{key}'])
             y_reg_acc.append(row[f'gfp_{key}_rate'])
 
     X = torch.FloatTensor(np.stack(X_acc))
     y_class = torch.FloatTensor(y_class_acc)
     y_reg = torch.FloatTensor(y_reg_acc)
-    
+
     return X, y_class, y_reg
 
 
@@ -96,7 +87,8 @@ def build_dataloaders(data: pd.DataFrame,
                       test_split: Union[str, Tuple[str, str]] = 'mix',
                       test_size: float = 0.2,
                       batch_size: int = 32,
-                      data_augment: bool = False):
+                      data_augment: bool = False,
+                      trna_availability: Optional[Mapping[str, float]] = None):
     _LABEL = {
         'minus': ['gfp_minus_rate'],
         'plus': ['gfp_plus_rate'],
@@ -123,13 +115,13 @@ def build_dataloaders(data: pd.DataFrame,
             raise ValueError(f"One or more values in `test_split` {test_split} are not valid prf_class values")
 
     if data_augment:
-        X_train, y_class_train, y_reg_train = build_tensors(train_data, key, size=150, stride=3)
+        X_train, y_class_train, y_reg_train = build_tensors(train_data, key, size=150, stride=3, trna_availability=trna_availability)
         tmp = val_data.copy()
         tmp['sequence'] = tmp['sequence'].map(lambda x: x[6:-6])
-        X_val, y_class_val, y_reg_val = build_tensors(tmp, key, 150, 1)
+        X_val, y_class_val, y_reg_val = build_tensors(tmp, key, 150, 1, trna_availability)
     else:
-        X_train, y_class_train, y_reg_train = build_tensors(train_data, key)
-        X_val, y_class_val, y_reg_val = build_tensors(val_data, key)
+        X_train, y_class_train, y_reg_train = build_tensors(train_data, key, trna_availability)
+        X_val, y_class_val, y_reg_val = build_tensors(val_data, key, trna_availability)
 
 
     # Create datasets and dataloaders using TensorDataset
